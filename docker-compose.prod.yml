@@ -89,7 +89,7 @@ services:
             - traefik_public
         labels:
             - "traefik.enable=true"
-            - "traefik.docker.network=traefik_public"
+            - "traefik.docker.network=${TRAEFIK_NETWORK:-traefik_public}"
             - "traefik.http.routers.${TRAEFIK_ROUTER_NAME:-whatsapp_api}.rule=Host(`${WHATSAPP_API_DOMAIN:?variavel nao definida - rode o compose com --env-file .env.prod}`)"
             - "traefik.http.routers.${TRAEFIK_ROUTER_NAME:-whatsapp_api}.entrypoints=websecure"
             - "traefik.http.routers.${TRAEFIK_ROUTER_NAME:-whatsapp_api}.tls=true"
@@ -110,8 +110,13 @@ services:
 networks:
     default:
         name: whatsapp_api_internal
+    # Rede do proxy reverso, criada FORA deste compose. O nome muda conforme a VPS:
+    # `traefik_public` numa instalacao manual do Traefik, `dokploy-network` quando o
+    # host roda Dokploy. Descubra com `docker network ls` e defina TRAEFIK_NETWORK
+    # no .env.prod. Sem isso o up falha com "declared as external, but could not be found".
     traefik_public:
         external: true
+        name: ${TRAEFIK_NETWORK:-traefik_public}
 
 volumes:
     postgres_data:
