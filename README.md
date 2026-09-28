@@ -60,7 +60,7 @@ Abaixo está o dicionário das variáveis principais:
 | `NODE_ENV` | Sim | `development` | Define o ambiente (`development` ou `production`). |
 | `PORT` | Não | `5003` | Porta de execução da API NestJS. |
 | `API_KEY` | Não | - | Chave interna de autorização para consumo das rotas protegidas. |
-| `DATABASE_URL` | Sim | *Ver .env.dev* | String de conexão com o PostgreSQL (ex: localhost:5434). |
+| `DATABASE_URL` | Sim | *Ver .env.dev* | String de conexão com o PostgreSQL (ex: localhost:5435). |
 | `RABBITMQ_URL` | Sim | *Ver .env.dev* | String de conexão com o RabbitMQ (ex: localhost:5675). |
 | `CLOUD_API_VERSION` | Sim | `v25.0` | Versão da Cloud API da Meta a ser consultada. |
 | `TOKEN_APP_META` | Sim | - | App Secret/Token de acesso raiz do aplicativo na Meta. |
@@ -117,6 +117,54 @@ cd web && npm test
 
 # Ou a partir da raiz:
 npm --prefix web test
+```
+
+---
+
+## 🐳 Rodando em Produção (Docker Compose)
+
+A stack de produção (`docker-compose.prod.yml`) sobe Postgres, RabbitMQ, FFMPEG API, um serviço one-shot de `migrate` e a API por trás do Traefik.
+
+> ⚠️ **O Compose carrega automaticamente apenas o arquivo `.env`.** Como a stack de produção usa `.env.prod`, a flag `--env-file .env.prod` é **obrigatória em todos os comandos**. Sem ela, `${POSTGRES_PASSWORD}`, `${RABBITMQ_PASSWORD}` e `${WHATSAPP_API_DOMAIN}` são interpolados como string vazia e o serviço `migrate` falha com erro de autenticação no Postgres (`exit 1`).
+
+### 1. Prepare o arquivo de ambiente
+
+```bash
+cp .env.prod.example .env.prod
+# preencha POSTGRES_PASSWORD, RABBITMQ_PASSWORD, WHATSAPP_API_DOMAIN e as credenciais da Meta
+```
+
+### 2. Build e subida da stack
+
+```bash
+docker compose --env-file .env.prod -f docker-compose.prod.yml build --no-cache
+docker compose --env-file .env.prod -f docker-compose.prod.yml up -d
+```
+
+Se a flag for esquecida, o Compose aborta imediatamente com a mensagem
+`required variable POSTGRES_PASSWORD is missing a value: variavel nao definida - rode o compose com --env-file .env.prod`,
+em vez de subir a stack com senhas vazias.
+
+**Dica:** para não depender da flag, crie um link simbólico no servidor:
+
+```bash
+ln -s .env.prod .env
+```
+
+### 3. Comandos úteis
+
+```bash
+# Conferir os valores finais interpolados antes de subir
+docker compose --env-file .env.prod -f docker-compose.prod.yml config
+
+# Logs da API
+docker compose --env-file .env.prod -f docker-compose.prod.yml logs -f api
+
+# Logs das migrations (diagnóstico de falha no serviço `migrate`)
+docker logs whatsapp-api-migrate-prod
+
+# Reaplicar migrations (um `restart api` NÃO reaplica)
+docker compose --env-file .env.prod -f docker-compose.prod.yml up -d
 ```
 
 ---

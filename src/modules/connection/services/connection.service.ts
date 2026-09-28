@@ -1,5 +1,4 @@
 import { Injectable } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
 import { DbService } from 'src/infrastructure/database/prisma/prisma.service';
 import { ConnectionCreateDto } from '../dtos/ConnectionCreateDto';
 import { ConnectionResponseDto } from '../dtos/ConnectionResponseDto';
@@ -8,18 +7,42 @@ import { ConnectionResponseDto } from '../dtos/ConnectionResponseDto';
 export class ConnectionService {
 	constructor(private readonly db: DbService) {}
 
-	async create(dto: ConnectionCreateDto): Promise<ConnectionResponseDto> {
-		try {
-			const createdConnection = await this.db.connections.create({ data: dto });
+	/**
+	 * Grava a conexão de forma idempotente, usando o phone_id como identidade.
+	 *
+	 * Uma reconexão (novo Embedded Signup do mesmo número) sempre gera um novo
+	 * user_token e pode reaproveitar o mesmo connection_name/waba_id. Como esses
+	 * três campos são @unique no schema, um `create` puro falha com P2002 e a
+	 * conexão nunca chega a ser propagada. Por isso os registros antigos que
+	 * colidiriam (mesmo nome/token/waba em OUTRO phone_id) são removidos antes
+	 * do upsert.
+	 */
+	async upsertByPhoneId(dto: ConnectionCreateDto): Promise<ConnectionResponseDto> {
+		const connection = await this.db.$transaction(async (tx) => {
+			await tx.connections.deleteMany({
+				where: {
+					phone_id: { not: dto.phone_id },
+					OR: [{ connection_name: dto.connection_name }, { user_token: dto.user_token }, { waba_id: dto.waba_id }],
+				},
+			});
 
-			return new ConnectionResponseDto(createdConnection);
-		} catch (error) {
-			if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
-				throw new Error('Já existe uma conexão com esses dados.');
-			}
+			return tx.connections.upsert({
+				where: { phone_id: dto.phone_id },
+				update: {
+					connection_name: dto.connection_name,
+					user_token: dto.user_token,
+					waba_id: dto.waba_id,
+				},
+				create: {
+					connection_name: dto.connection_name,
+					user_token: dto.user_token,
+					phone_id: dto.phone_id,
+					waba_id: dto.waba_id,
+				},
+			});
+		});
 
-			throw error;
-		}
+		return new ConnectionResponseDto(connection);
 	}
 
 	async getAll(): Promise<ConnectionResponseDto[]> {

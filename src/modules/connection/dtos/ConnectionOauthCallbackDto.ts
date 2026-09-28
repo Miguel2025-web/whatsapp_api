@@ -16,4 +16,12 @@ export class ConnectionOauthCallbackDto {
 	@IsString()
 	@IsOptional()
 	connection_name?: string;
+
+	@ApiPropertyOptional({
+		description:
+			'ID do número devolvido pela Meta no evento WA_EMBEDDED_SIGNUP. Quando informado evita a consulta a /{waba_id}/phone_numbers, que pode vir vazia logo após o onboarding (fluxo de coexistência).',
+	})
+	@IsString()
+	@IsOptional()
+	phone_number_id?: string;
 }
